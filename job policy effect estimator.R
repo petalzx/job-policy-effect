@@ -2,16 +2,15 @@ library(glmnet)
 library(MASS)
 library(dplyr)
 
-# Load and preprocess data
 jtpa.cq <- read.csv("mydata.csv", header = TRUE)[, -(1:2)]
 
-# Create pre-earning categories
+# Pre-earning categories
 income_bracket <- function(x) {
   case_when(x <= 1000 ~ 1, x > 1000 & x <= 4000 ~ 2, x > 4000 ~ 3)
 }
 jtpa.cq$preearn <- sapply(jtpa.cq$bfyrearn, income_bracket)
 
-# Create education categories
+# Education categories
 edu_bracket <- function(x) {
   case_when(x <= 8 ~ 1,
             x > 8 & x <= 10 ~ 2,
@@ -41,12 +40,13 @@ analysis_data <- data.frame(Y, D, W) %>%
   bind_cols(as.data.frame(X)) %>%
   na.omit()
 
-# Modified functions with 18 W categories
+# Create folds
 create_folds <- function(n, K) {
   indices <- sample(1:n)
   split(indices, cut(seq_along(indices), K, labels = FALSE))
 }
 
+# Gamma Estimation Function
 estimate_gamma <- function(data, treatment) {
   sub_data <- data %>% filter(D == treatment)
   if (nrow(sub_data) == 0)
@@ -58,6 +58,7 @@ estimate_gamma <- function(data, treatment) {
   cv.glmnet(X, Y, alpha = 1, nfolds = 10)
 }
 
+# Compute G and P Matrices
 compute_GP <- function(data, gamma1_pred, gamma0_pred) {
   X <- as.matrix(data %>% select(-Y, -D, -W))
   n <- nrow(data)
