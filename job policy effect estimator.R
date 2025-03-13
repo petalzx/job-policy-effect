@@ -159,7 +159,9 @@ run_algorithm <- function(data = analysis_data, K = 5) {
     
     # Optimal lambdas
     lambda1 <- lambda_grid[which.min(total_cv1)]
+    cat("lambda1: ", lambda1, "\n")
     lambda0 <- lambda_grid[which.min(total_cv0)]
+    cat("lambda0: ", lambda0, "\n")
     
     # Final omega coefficients
     GP <- compute_GP(
@@ -205,4 +207,3 @@ run_algorithm <- function(data = analysis_data, K = 5) {
 
 # Example Usage
 results <- run_algorithm()
-view(results)
