@@ -28,15 +28,15 @@ jtpa.cq$W <- as.numeric(interaction(jtpa.cq$preearn, jtpa.cq$preedu))
 set.seed(210010)
 Y <- jtpa.cq$earnings
 D <- jtpa.cq$D
-X <- model.matrix( ~ (
+X <- model.matrix(~ (
   male + hsorged + black + hispanic + married + wkless13 +
     scale(age) + scale(bfeduca) + scale(bfyrearn)
-) ^ 2 - 1,
+)^2 - 1,
 data = jtpa.cq)
 W <- jtpa.cq$W
 
 # Create complete dataset
-analysis_data <- data.frame(Y, D, W, preearn = jtpa.cq$preearn, preedu = jtpa.cq$preedu) %>%
+analysis_data <- data.frame(Y, D, W) %>%
   bind_cols(as.data.frame(X)) %>%
   na.omit()
 
@@ -115,8 +115,8 @@ compute_omega_cv <- function(train_data,
   cv_errors
 }
 
-# Main Algorithm
-run_algorithm <- function(data = analysis_data, K = 5) {
+# Estimate treatment effects and policy-relevant predictions 
+estimate_treatment_effect <- function(data = analysis_data, K = 5) {
   n <- nrow(data)
   lambda_grid <- seq(0.1, 3, by = 0.1)
   folds <- create_folds(n, K)
@@ -199,12 +199,76 @@ run_algorithm <- function(data = analysis_data, K = 5) {
   
   # Combine results and calculate xi
   final_data <- bind_rows(results) %>%
-    mutate(xi = (gamma1 - gamma0) ^ 2 +
+    mutate(xi = (gamma1 - gamma0)^2 +
              (D * omega1 * (Y - gamma1) - (1 - D) * omega0 * (Y - gamma0)))
   
-  final_data <- final_data[order(as.numeric(rownames(final_data))), ]
   return(final_data)
 }
 
 # Example Usage
-results <- run_algorithm()
+results <- estimate_treatment_effect()
+
+# Reformat results for step 2
+reformat_results <- function(df = results) {
+  formatted_data <- df %>% select(-omega1, -omega0) %>% 
+    select(xi, Y, D, male:`scale(bfeduca):scale(bfyrearn)`, W, gamma1, gamma0)
+  return(formatted_data)
+}
+
+# Compute proportion (aˆj) of individuals who should receive job training in each group
+compute_optimal_props <- function(data) {
+  a_hat <- numeric(18)
+  
+  for (j in 1:18) {
+    group_data <- data %>% filter(W == j)
+    
+    objective <- function(a) {
+      with(group_data, sum(xi * (as.numeric(gamma1 - gamma0 >= 0) - a) ^ 2))
+    }
+    
+    opt_result <- optim(
+      par = 0.5,
+      fn = objective,
+      method = "L-BFGS-B",
+      lower = 0,
+      upper = 1
+    )
+    
+    a_hat[j] = opt_result$par
+  }
+  return(a_hat)
+}
+
+# Create heat map of optimal proportion of individuals
+# in each education and income group who should receive job training
+
+generate_heatmap <- function(proportions) {
+  prop_matrix <- matrix(proportions, nrow = 3, ncol = 6)
+  
+  library(reshape)
+  library(ggplot2)
+  
+  our_rule_plot <- melt(prop_matrix)
+  colnames(our_rule_plot) <- c("pre-program income", "pre-program education", "decision rule")
+  
+  # Create the base plot and add all layers in one go
+  heatmap <- ggplot(our_rule_plot, aes(`pre-program education`, `pre-program income`)) +
+    geom_tile(aes(fill = `decision rule`)) +
+    scale_fill_gradient(low = "white", high = "#d12168", limits = c(0, 1)) +
+    labs(x = "pre-program education bracket", 
+         y = "pre-program income bracket", 
+         title = "Our proposed approach") +
+    annotate("text", x = 6, y = 1, label = sprintf("%.2f", prop_matrix[1, 6])) +
+    annotate("text", x = 3, y = 2, label = sprintf("%.2f", prop_matrix[2, 3])) +
+    annotate("text", x = 3, y = 3, label = sprintf("%.2f", prop_matrix[3, 3]))
+  
+  return(heatmap)
+  
+  # Adding some example annotations (you can modify these based on actual values)
+}
+
+formatted_data <- reformat_results()
+proportions <- compute_optimal_props(formatted_data)
+heatmap_plot <- generate_heatmap(proportions)
+
+print(heatmap_plot)
