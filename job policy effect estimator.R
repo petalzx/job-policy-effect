@@ -28,15 +28,15 @@ jtpa.cq$W <- as.numeric(interaction(jtpa.cq$preearn, jtpa.cq$preedu))
 set.seed(210010)
 Y <- jtpa.cq$earnings
 D <- jtpa.cq$D
-X <- model.matrix(~ (
+X <- model.matrix( ~ (
   male + hsorged + black + hispanic + married + wkless13 +
     scale(age) + scale(bfeduca) + scale(bfyrearn)
-)^2 - 1,
+) ^ 2 - 1,
 data = jtpa.cq)
 W <- jtpa.cq$W
 
 # Create complete dataset
-analysis_data <- data.frame(Y, D, W) %>%
+analysis_data <- data.frame(Y, D, W, preearn = jtpa.cq$preearn, preedu = jtpa.cq$preedu) %>%
   bind_cols(as.data.frame(X)) %>%
   na.omit()
 
@@ -199,9 +199,10 @@ run_algorithm <- function(data = analysis_data, K = 5) {
   
   # Combine results and calculate xi
   final_data <- bind_rows(results) %>%
-    mutate(xi = (gamma1 - gamma0)^2 +
+    mutate(xi = (gamma1 - gamma0) ^ 2 +
              (D * omega1 * (Y - gamma1) - (1 - D) * omega0 * (Y - gamma0)))
   
+  final_data <- final_data[order(as.numeric(rownames(final_data))), ]
   return(final_data)
 }
 
