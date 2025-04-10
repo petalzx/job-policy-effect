@@ -6,18 +6,22 @@ jtpa.cq <- read.csv("mydata.csv", header = TRUE)[, -(1:2)]
 
 # Pre-earning categories
 income_bracket <- function(x) {
-  case_when(x <= 1000 ~ 1, x > 1000 & x <= 4000 ~ 2, x > 4000 ~ 3)
+  # case_when(x <= 1000 ~ 1, x > 1000 & x <= 4000 ~ 2, x > 4000 ~ 3)
+  case_when(x <= 220 ~ 1, x > 220 & x <= 3800 ~ 2, x > 3800 ~ 3)
 }
 jtpa.cq$preearn <- sapply(jtpa.cq$bfyrearn, income_bracket)
 
 # Education categories
 edu_bracket <- function(x) {
-  case_when(x <= 8 ~ 1,
-            x > 8 & x <= 10 ~ 2,
-            x > 10 & x <= 11 ~ 3,
-            x > 11 & x <= 12 ~ 4,
-            x > 12 & x <= 14 ~ 5,
-            x > 14 ~ 6)
+  # case_when(x <= 8 ~ 1,
+  #           x > 8 & x <= 10 ~ 2,
+  #           x > 10 & x <= 11 ~ 3,
+  #           x > 11 & x <= 12 ~ 4,
+  #           x > 12 & x <= 14 ~ 5,
+  #           x > 14 ~ 6)
+  case_when(x <= 11 ~ 1,
+            x == 12 ~ 2,
+            x > 12 ~ 3)
 }
 jtpa.cq$preedu <- sapply(jtpa.cq$bfeduca, edu_bracket)
 
@@ -111,6 +115,8 @@ compute_omega_cv <- function(train_data,
       }))
     } else if (method == "aggregate") {
       sum(abs(term))
+    } else if (method == "squared"){
+      sum(term ^ 2)
     }
   })
   
@@ -120,7 +126,7 @@ compute_omega_cv <- function(train_data,
 # Estimate treatment effects and policy-relevant predictions 
 estimate_treatment_effect <- function(data = analysis_data, K = 5, method = "category_weighted") {
   n <- nrow(data)
-  lambda_grid <- seq(0.1, 3, by = 0.1)
+  lambda_grid <- seq(0, 5, by = 0.1)
   folds <- create_folds(n, K)
   results <- list()
   
@@ -208,7 +214,7 @@ estimate_treatment_effect <- function(data = analysis_data, K = 5, method = "cat
 }
 
 # Example Usage
-results <- estimate_treatment_effect(method = "aggregate")
+results <- estimate_treatment_effect(method = "squared")
 
 # Reformat results for step 2
 reformat_results <- function(df = results) {
@@ -219,24 +225,27 @@ reformat_results <- function(df = results) {
 
 # Compute proportion (aˆj) of individuals who should receive job training in each group
 compute_optimal_props <- function(data) {
-  a_hat <- numeric(18)
+  a_hat <- numeric(9)
   
-  for (j in 1:18) {
+  for (j in 1:9) {
     group_data <- data %>% filter(W == j)
     
     objective <- function(a) {
       with(group_data, sum(xi * (as.numeric(gamma1 - gamma0 >= 0) - a) ^ 2))
     }
     
-    opt_result <- optim(
-      par = 0.5,
-      fn = objective,
-      method = "L-BFGS-B",
-      lower = 0,
-      upper = 1
-    )
+    # Default method could work (look into optimize)
+    # opt_result <- optim(
+    #   par = 0.5,
+    #   fn = objective,
+    #   method = "L-BFGS-B",
+    #   lower = 0,
+    #   upper = 1
+    # )
     
-    a_hat[j] = opt_result$par
+    opt_result <- optimize(objective, lower = 0, upper = 1)
+    
+    a_hat[j] = round(opt_result$minimum, 2)
   }
   return(a_hat)
 }
@@ -245,7 +254,7 @@ compute_optimal_props <- function(data) {
 # in each education and income group who should receive job training
 
 generate_heatmap <- function(proportions) {
-  prop_matrix <- matrix(proportions, nrow = 3, ncol = 6)
+  prop_matrix <- matrix(proportions, nrow = 3, ncol = 3)
   
   library(reshape)
   library(ggplot2)
@@ -259,10 +268,10 @@ generate_heatmap <- function(proportions) {
     scale_fill_gradient(low = "white", high = "#d12168", limits = c(0, 1)) +
     labs(x = "pre-program education bracket", 
          y = "pre-program income bracket", 
-         title = "Our proposed approach") +
-    annotate("text", x = 6, y = 1, label = sprintf("%.2f", prop_matrix[1, 6])) +
-    annotate("text", x = 3, y = 2, label = sprintf("%.2f", prop_matrix[2, 3])) +
-    annotate("text", x = 3, y = 3, label = sprintf("%.2f", prop_matrix[3, 3]))
+         title = "Our proposed approach") 
+    # annotate("text", x = 6, y = 1, label = sprintf("%.2f", prop_matrix[1, 6])) +
+    # annotate("text", x = 3, y = 2, label = sprintf("%.2f", prop_matrix[2, 3])) +
+    # annotate("text", x = 3, y = 3, label = sprintf("%.2f", prop_matrix[3, 3]))
   
   return(heatmap)
   
@@ -271,6 +280,10 @@ generate_heatmap <- function(proportions) {
 
 formatted_data <- reformat_results()
 proportions <- compute_optimal_props(formatted_data)
-heatmap_plot <- generate_heatmap(proportions)
 
-print(heatmap_plot)
+matrix(proportions, nrow = 3, ncol = 3)
+
+heat_map <- generate_heatmap(proportions)
+
+# print(square_regret_rule$prop_matrix)
+# print(square_regret_rule$heatmap_plot)
