@@ -73,7 +73,8 @@ compute_GP <- function(data, gamma1_pred, gamma0_pred) {
 compute_omega_cv <- function(train_data,
                              test_data,
                              lambda_grid,
-                             treatment) {
+                             treatment,
+                             method = "catergory_weighted") {
   # Gamma estimation
   gamma1_model <- estimate_gamma(train_data, 1)
   gamma0_model <- estimate_gamma(train_data, 0)
@@ -85,10 +86,7 @@ compute_omega_cv <- function(train_data,
   
   # GP matrices
   GP <- compute_GP(train_data, gamma1_train, gamma0_train)
-  G <- if (treatment == 1)
-    GP$G1
-  else
-    GP$G0
+  G <- if (treatment == 1) GP$G1 else GP$G0
   P <- GP$P
   
   # Cross-validation errors
@@ -107,16 +105,20 @@ compute_omega_cv <- function(train_data,
         predict(gamma0_model, as.matrix(test_data %>% select(-Y, -D, -W)), s = "lambda.min")
     }
     
-    sum(sapply(1:18, function(s) {
-      sum(abs(term * (test_data$W == s)))
-    }))
+    if (method == "catergory_weighted") {
+      sum(sapply(1:18, function(s) {
+        sum(abs(term * (test_data$W == s)))
+      }))
+    } else if (method == "aggregate") {
+      sum(abs(term))
+    }
   })
   
   cv_errors
 }
 
 # Estimate treatment effects and policy-relevant predictions 
-estimate_treatment_effect <- function(data = analysis_data, K = 5) {
+estimate_treatment_effect <- function(data = analysis_data, K = 5, method = "category_weighted") {
   n <- nrow(data)
   lambda_grid <- seq(0.1, 3, by = 0.1)
   folds <- create_folds(n, K)
@@ -149,11 +151,11 @@ estimate_treatment_effect <- function(data = analysis_data, K = 5) {
       inner_test <- data_kc[inner_I_j, ]
       
       # Omega1 CV
-      cv1 <- compute_omega_cv(inner_train, inner_test, lambda_grid, 1)
+      cv1 <- compute_omega_cv(inner_train, inner_test, lambda_grid, 1, method)
       total_cv1 <- total_cv1 + cv1
       
       # Omega0 CV
-      cv0 <- compute_omega_cv(inner_train, inner_test, lambda_grid, 0)
+      cv0 <- compute_omega_cv(inner_train, inner_test, lambda_grid, 0, method)
       total_cv0 <- total_cv0 + cv0
     }
     
@@ -206,7 +208,7 @@ estimate_treatment_effect <- function(data = analysis_data, K = 5) {
 }
 
 # Example Usage
-results <- estimate_treatment_effect()
+results <- estimate_treatment_effect(method = "aggregate")
 
 # Reformat results for step 2
 reformat_results <- function(df = results) {
