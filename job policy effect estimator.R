@@ -2,6 +2,8 @@ library(glmnet)
 library(MASS)
 library(dplyr)
 
+rm(list=ls())
+
 jtpa.cq <- read.csv("mydata.csv", header = TRUE)[, -(1:2)]
 
 # Pre-earning categories
@@ -25,7 +27,7 @@ edu_bracket <- function(x) {
 }
 jtpa.cq$preedu <- sapply(jtpa.cq$bfeduca, edu_bracket)
 
-# Create 18-category W variable
+# Create n-category W variable
 jtpa.cq$W <- as.numeric(interaction(jtpa.cq$preearn, jtpa.cq$preedu))
 
 # Set up variables
@@ -38,6 +40,7 @@ X <- model.matrix(~ (
 )^2 - 1,
 data = jtpa.cq)
 W <- jtpa.cq$W
+num_categories <- length(unique(W))
 
 # Create complete dataset
 analysis_data <- data.frame(Y, D, W) %>%
@@ -46,8 +49,18 @@ analysis_data <- data.frame(Y, D, W) %>%
 
 # Create folds
 create_folds <- function(n, K) {
-  indices <- sample(1:n)
-  split(indices, cut(seq_along(indices), K, labels = FALSE))
+  # indices <- sample(1:n)
+  # split(indices, cut(seq_along(indices), K, labels = FALSE))
+  
+  random_values <- runif(n)
+  quantiles <- unique(quantile(random_values, probs = seq(0, 1, 1/K)))
+  K_adj <- length(quantiles) - 1
+  if (K_adj < K) {
+    warning(paste("Due to ties in random values or quantiles, number of actual folds created is", K_adj, "instead of requested", K))
+  }
+  fold_assignments <- cut(random_values, breaks = quantiles, labels = FALSE, include.lowest = TRUE)
+  indices <- 1:n
+  split(indices, fold_assignments)
 }
 
 # Gamma Estimation Function
@@ -107,10 +120,10 @@ compute_omega_cv <- function(train_data,
     } else {
       (1 - test_data$D) * omega_test * test_data$Y - 2 * gamma_diff *
         predict(gamma0_model, as.matrix(test_data %>% select(-Y, -D, -W)), s = "lambda.min")
-    }
+    } 
     
     if (method == "catergory_weighted") {
-      sum(sapply(1:18, function(s) {
+      sum(sapply(1:num_categories, function(s) {
         sum(abs(term * (test_data$W == s)))
       }))
     } else if (method == "aggregate") {
@@ -128,6 +141,7 @@ estimate_treatment_effect <- function(data = analysis_data, K = 5, method = "cat
   n <- nrow(data)
   lambda_grid <- seq(0, 5, by = 0.1)
   folds <- create_folds(n, K)
+  print(folds)
   results <- list()
   
   for (k in 1:K) {
@@ -224,10 +238,10 @@ reformat_results <- function(df = results) {
 }
 
 # Compute proportion (aˆj) of individuals who should receive job training in each group
-compute_optimal_props <- function(data) {
-  a_hat <- numeric(9)
+compute_optimal_props <- function(data, num_categories) {
+  a_hat <- numeric(num_categories)
   
-  for (j in 1:9) {
+  for (j in 1:num_categories) {
     group_data <- data %>% filter(W == j)
     
     objective <- function(a) {
@@ -279,7 +293,7 @@ generate_heatmap <- function(proportions) {
 }
 
 formatted_data <- reformat_results()
-proportions <- compute_optimal_props(formatted_data)
+proportions <- compute_optimal_props(formatted_data, num_categories)
 
 matrix(proportions, nrow = 3, ncol = 3)
 

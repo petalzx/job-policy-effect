@@ -1,4 +1,3 @@
-setwd("~...")
 rm(list=ls())
 
 jtpa.cq <- read.csv("mydata.csv",header = TRUE)[,-(1:2)]
@@ -346,6 +345,8 @@ for (i in 1:(max(ATE$preedu)-min(ATE$preedu)+1)) {
   }
   
 }
+
+# run up to here to get prop matrix
 
 squared.regret.plug.in.rule<- matrix(0,3, max(ATE$preedu)-min(ATE$preedu)+1)
 
