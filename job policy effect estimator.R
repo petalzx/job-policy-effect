@@ -63,6 +63,14 @@ create_folds <- function(n, K) {
   split(indices, fold_assignments)
 }
 
+create_inner_folds <- function(n, J){
+  folds <- sample(rep(1:J, length.out = n)) # 1, 2, ...J repeats until n 
+  
+  # 2. Create the list of indices using split()
+  # seq_along(folds) generates the sequence of indices: 1, 2, 3, ..., n
+  split(seq_along(folds), folds)
+}
+
 # Gamma Estimation Function
 estimate_gamma <- function(data, treatment) {
   sub_data <- data %>% filter(D == treatment)
@@ -162,7 +170,9 @@ estimate_treatment_effect <- function(data = analysis_data, K = 5, method = "cat
     gamma0_k <- predict(gamma0_model, newx = X_k, s = "lambda.min")
     
     # Omega estimation with inner CV
-    inner_folds <- create_folds(nrow(data_kc), 10)
+    
+    # Try Chen's method for creating 
+    inner_folds <- create_inner_folds(nrow(data_kc), 10)
     total_cv1 <- total_cv0 <- numeric(length(lambda_grid))
     
     for (j in 1:10) {
