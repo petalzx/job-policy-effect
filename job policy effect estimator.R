@@ -66,9 +66,8 @@ create_folds <- function(n, K) {
 create_inner_folds <- function(n, J){
   folds <- sample(rep(1:J, length.out = n)) # 1, 2, ...J repeats until n 
   
-  # 2. Create the list of indices using split()
-  # seq_along(folds) generates the sequence of indices: 1, 2, 3, ..., n
-  split(seq_along(folds), folds)
+  indices <- 1:n
+  split(indices, folds)
 }
 
 # Gamma Estimation Function
@@ -149,7 +148,6 @@ estimate_treatment_effect <- function(data = analysis_data, K = 5, method = "cat
   n <- nrow(data)
   lambda_grid <- seq(0, 5, by = 0.1)
   folds <- create_folds(n, K)
-  print(folds)
   results <- list()
   
   for (k in 1:K) {

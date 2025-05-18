@@ -33,7 +33,7 @@ jtpa.cq$preedu <-sapply(bfeduca,edu.braket,simplify = TRUE)
 library(glmnet)
 library("MASS")
 
-set.seed(17)
+set.seed(210010)
 
 #number of folds for cross fitting#
 K <- 5
